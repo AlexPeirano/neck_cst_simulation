@@ -90,6 +90,5 @@ ax.set_xlim(freq_min, freq_max)
 ax.legend(fontsize=9, loc='lower left')
 
 plt.tight_layout()
-plt.savefig("S21_u", dpi=150)
-# plt.show()1_u.png", dpi=150)
+plt.savefig("S21_compare_all.png", dpi=150)
 # plt.show()

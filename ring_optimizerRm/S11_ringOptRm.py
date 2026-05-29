@@ -92,5 +92,4 @@ ax.legend(fontsize=9, loc='lower left')
 
 plt.tight_layout()
 plt.savefig("S11_compare_all.png", dpi=150)
-# plt.show()png", dpi=150)
 # plt.show()
