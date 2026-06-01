@@ -31,61 +31,54 @@ def lister_fichiers_touchstone(dossier: Path) -> list[Path]:
 			fichiers.append(chemin)
 	return fichiers
 
-def extraire_rm(chemin: Path) -> str | None:
-	with chemin.open("r", encoding="utf-8", errors="ignore") as handle:
-		for _ in range(40):
-			ligne = handle.readline()
-			if not ligne:
+def extraire_params(chemin: Path) -> tuple[str, str]:
+	rm = "N/A"
+	tcouple = "N/A"
+	with chemin.open("r", encoding="utf-8", errors="ignore") as f:
+		for line in f:
+			if "! Parameters =" in line:
+				m_rm = re.search(r"R_m=([^;{}]+)", line)
+				m_tc = re.search(r"tcoupling=([^;{}]+)", line)
+				if m_rm: rm = m_rm.group(1).strip()
+				if m_tc: tcouple = m_tc.group(1).strip()
 				break
-			if "Parameters" not in ligne:
-				continue
-			match = re.search(r"Ls=([^;]+)", ligne)
-			if match:
-				return match.group(1).strip()
-	return None
+	return rm, tcouple
 
-fichiers = sorted(list(dossier.glob("tcouplePsweepRing_*.s2p")))
+fichiers = sorted(list(dossier.glob("ring_topology_Rm_sweep_*.s2p")))
 
 if not fichiers:
-	raise FileNotFoundError("Aucun fichier tcouplePsweepRing_*.s2p trouve dans le dossier.")
+	raise FileNotFoundError("Aucun fichier ring_topology_Rm_sweep_*.s2p trouve dans le dossier.")
 
 fig, ax = plt.subplots(figsize=(11, 6))
 
 freq_min = None
 freq_max = None
 
-# Mappage des valeurs selon la demande utilisateur
-label_map = {
-    "8": "Tcouple = 4mm",
-    "10": "Tcouple = 6mm",
-    "12": "Tcouple = 8mm",
-    "14": "Tcouple = 10mm"
-}
-
 for chemin in fichiers:
 	reseau = charger_touchstone(chemin)
 	freq_ghz = reseau.f / 1e9
-	s21_db = reseau.s_db[:, 1, 0]
+	s11_db = reseau.s_db[:, 0, 0]
 
-	# Extraction de la valeur depuis le nom du fichier (ex: tcouplePsweepRing_10.s2p -> 10)
-	match = re.search(r"_(\d+)\.s2p$", chemin.name)
-	val = match.group(1) if match else None
-	label = label_map.get(val, chemin.name)
+	rm, tcouple = extraire_params(chemin)
+	label = f"Rm={rm}, Tcouple={tcouple}"
 
-	ax.plot(freq_ghz, s21_db, linewidth=1.8, label=label)
+	ax.plot(freq_ghz, s11_db, linewidth=1.8, label=label)
 
 	if freq_min is None or freq_ghz[0] < freq_min:
 		freq_min = freq_ghz[0]
 	if freq_max is None or freq_ghz[-1] > freq_max:
 		freq_max = freq_ghz[-1]
 
+# indication line at -10dB
+ax.axhline(y=-10, color='black', linestyle='--', linewidth=1, label="-10dB")
+
 ax.set_xlabel('Frequency [GHz]', fontsize=13)
-ax.set_ylabel('S21 [dB]', fontsize=13)
-ax.set_title('S21 Comparison', fontsize=14)
+ax.set_ylabel('S11 [dB]', fontsize=13)
+ax.set_title('S11 Comparison', fontsize=14)
 ax.grid(True, alpha=0.35)
 ax.set_xlim(freq_min, freq_max)
 ax.legend(fontsize=9, loc='lower left')
 
 plt.tight_layout()
-plt.savefig("S21_compare_all.png", dpi=150)
+plt.savefig("S11_compare_all.png", dpi=150)
 # plt.show()
