@@ -31,20 +31,26 @@ def lister_fichiers_touchstone(dossier: Path) -> list[Path]:
 			fichiers.append(chemin)
 	return fichiers
 
-def extraire_params(chemin: Path) -> str:
-	wfeed = "N/A"
+def extraire_params(chemin: Path) -> dict:
+	params = {"Rm": "N/A", "Tcouple": "N/A", "wslot": "N/A", "wgnd": "N/A"}
 	with chemin.open("r", encoding="utf-8", errors="ignore") as f:
 		for line in f:
 			if "! Parameters =" in line:
-				m_wf = re.search(r"wfeed=([^;{}]+)", line)
-				if m_wf: wfeed = m_wf.group(1).strip()
+				m_rm = re.search(r"R_m=([^;{}]+)", line)
+				m_tc = re.search(r"tcoupling=([^;{}]+)", line)
+				m_ws = re.search(r"w_slot=([^;{}]+)", line)
+				m_wg = re.search(r"wgnd=([^;{}]+)", line)
+				if m_rm: params["Rm"] = m_rm.group(1).strip()
+				if m_tc: params["Tcouple"] = m_tc.group(1).strip()
+				if m_ws: params["wslot"] = m_ws.group(1).strip()
+				if m_wg: params["wgnd"] = m_wg.group(1).strip()
 				break
-	return wfeed
+	return params
 
-fichiers = sorted(list(dossier.glob("initial_topo_wfeedsweep_*.s2p")), key=lambda x: int(re.search(r"(\d+)", x.name).group(1)) if re.search(r"(\d+)", x.name) else x.name)
+fichiers = sorted(list(dossier.glob("ring_shift_2_*.s2p")), key=lambda x: int(re.search(r"(\d+)(?=\.s2p)", x.name).group(1)) if re.search(r"(\d+)(?=\.s2p)", x.name) else x.name)
 
 if not fichiers:
-	raise FileNotFoundError("Aucun fichier initial_topo_wfeedsweep_*.s2p trouve dans le dossier.")
+	raise FileNotFoundError("Aucun fichier ring_shift_2_*.s2p trouve dans le dossier.")
 
 fig, ax = plt.subplots(figsize=(11, 6))
 
@@ -52,12 +58,13 @@ freq_min = None
 freq_max = None
 
 for chemin in fichiers:
+	p = extraire_params(chemin)
+	
 	reseau = charger_touchstone(chemin)
 	freq_ghz = reseau.f / 1e9
 	s21_db = reseau.s_db[:, 1, 0]
 
-	wfeed = extraire_params(chemin)
-	label = f"Wfeed={wfeed}"
+	label = f"Rm={p['Rm']}, Tc={p['Tcouple']}, ws={p['wslot']}, wgnd={p['wgnd']}"
 
 	ax.plot(freq_ghz, s21_db, linewidth=1.8, label=label)
 
@@ -75,5 +82,5 @@ ax.set_xlim(freq_min, freq_max)
 ax.legend(fontsize=9, loc='best')
 
 plt.tight_layout()
-plt.savefig("S21_compare_all.png", dpi=150)
+plt.savefig("S21_ring_shift", dpi=150)
 # plt.show()
