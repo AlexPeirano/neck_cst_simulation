@@ -18,9 +18,9 @@ FILES = {
     '2.69': 'h-field (f=2.69) [1].h5',
 }
 
-# Grid resolution for interpolation
-GRID_NX = 600
-GRID_NY = 800
+# Grid resolution for interpolation (higher = smoother, slower)
+GRID_NX = 800
+GRID_NY = 1000
 
 # GIF frame duration in milliseconds
 GIF_DURATION_MS = 1200
@@ -37,6 +37,10 @@ def load_hfield(filepath: str):
     """
     Load position and H-field magnitude from a CST HDF5 export.
 
+    Only the top surface layer (z = z_max) is returned to avoid
+    triangulation artefacts caused by mixing points from different
+    physical z-layers during 2-D scatter interpolation.
+
     Returns
     -------
     x, y : ndarray  — surface point coordinates in mm
@@ -51,12 +55,25 @@ def load_hfield(filepath: str):
     Hz = hfield['z']['re'] + 1j * hfield['z']['im']
     Hmag = np.sqrt(np.abs(Hx)**2 + np.abs(Hy)**2 + np.abs(Hz)**2)
 
-    return pos['x'], pos['y'], Hmag
+    # --- Keep only the top surface layer -----------------------------------
+    # CST exports H-field on all mesh faces; mixing z-layers in a 2-D
+    # interpolation produces triangular artefacts from Delaunay triangulation.
+    z = pos['z']
+    z_surface = z.max()
+    mask = np.isclose(z, z_surface, atol=1e-6)
+    print(f'    Filtering to z_surface={z_surface:.4f} mm  '
+          f'({mask.sum()} / {len(z)} points kept)')
+
+    return pos['x'][mask], pos['y'][mask], Hmag[mask]
 
 
 def interpolate_to_grid(x, y, values, nx=GRID_NX, ny=GRID_NY):
     """
     Scatter-to-grid interpolation using linear griddata.
+
+    Linear (Delaunay) interpolation is sharp and faithful to the data.
+    Triangulation artefacts are avoided by pre-filtering to a single
+    z-layer in load_hfield(), so 'linear' is safe and preferable here.
 
     Returns
     -------
@@ -112,7 +129,7 @@ def plot_frame(XI, YI, Vgrid, freq_str, clim, cbar_label, title_suffix):
         aspect='equal',
         cmap=PARULA,
         norm=norm,
-        interpolation='bicubic',
+        interpolation='antialiased',  # sharp but no pixel staircase
     )
 
     ax.set_title(
